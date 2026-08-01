@@ -1,0 +1,105 @@
+import { LocalNotifications } from '@capacitor/local-notifications';
+import { Medication, IntakeLog, Patient } from '../types';
+
+export const NotificationService = {
+    async requestPermissions() {
+        const perm = await LocalNotifications.requestPermissions();
+        return perm.display === 'granted';
+    },
+
+    async cancelAll() {
+        const pending = await LocalNotifications.getPending();
+        if (pending.notifications.length > 0) {
+            await LocalNotifications.cancel(pending);
+        }
+    },
+
+    async scheduleMedicationNotifications(medications: Medication[], logs: IntakeLog[], patients: Patient[]) {
+        await LocalNotifications.createChannel({
+            id: 'medication_reminders',
+            name: 'Promemoria Farmaci',
+            description: 'Canale prioritario per l\'assunzione dei farmaci',
+            importance: 5, // IMPORTANCE_HIGH
+            visibility: 1, // VISIBILITY_PUBLIC
+            vibration: true,
+            sound: 'pillshake'
+        });
+
+        await this.cancelAll();
+
+        const notifications: any[] = [];
+        const todayIso = new Date().toLocaleDateString('en-CA'); // YYYY-MM-DD format
+
+        medications.forEach(med => {
+            if (!med.isActive || !med.notificationsEnabled) return;
+
+            const patient = patients.find(p => p.id === med.patientId) || patients[0];
+            const patientName = patient ? patient.name : 'Paziente';
+
+            let everyValue: 'day' | 'week' | 'month' = 'day';
+            if (med.frequency === 'weekly') everyValue = 'week';
+            if (med.frequency === 'monthly') everyValue = 'month';
+
+            med.schedule.forEach((slot, index) => {
+                const [hours, minutes] = slot.time.split(':').map(Number);
+
+                const scheduleDate = new Date();
+                scheduleDate.setHours(hours, minutes, 0, 0);
+
+                // Check if already taken or skipped today
+                const isAlreadyLoggedToday = logs.some(l =>
+                    String(l.medicationId) === String(med.id) &&
+                    l.date === todayIso &&
+                    l.time === slot.time &&
+                    (l.status === 'taken' || l.status === 'skipped')
+                );
+
+                if (isAlreadyLoggedToday || scheduleDate.getTime() <= Date.now()) {
+                    if (med.frequency === 'daily') {
+                        scheduleDate.setDate(scheduleDate.getDate() + 1);
+                    } else if (med.frequency === 'weekly') {
+                        scheduleDate.setDate(scheduleDate.getDate() + 7);
+                    } else if (med.frequency === 'monthly') {
+                        scheduleDate.setMonth(scheduleDate.getMonth() + 1);
+                    }
+                }
+
+                // Generate deterministic ID consistent with App.tsx
+                const idStr = `${med.id}-${slot.time}-${index}`;
+                let hash = 0;
+                for (let i = 0; i < idStr.length; i++) {
+                    hash = ((hash << 5) - hash) + idStr.charCodeAt(i);
+                    hash |= 0;
+                }
+                const notificationId = Math.abs(hash);
+
+                notifications.push({
+                    title: `La Mia Salute`,
+                    body: `Ciao ${patientName}, è ora di assumere ${slot.quantity} ${med.unit} di ${med.name} (${slot.time})`,
+                    id: notificationId,
+                    schedule: {
+                        at: scheduleDate,
+                        allowWhileIdle: true,
+                        every: everyValue
+                    },
+                    smallIcon: 'ic_stat_pill',
+                    largeIcon: 'res://ic_launcher',
+                    channelId: 'medication_reminders',
+                    extra: {
+                        medId: med.id,
+                        time: slot.time,
+                        date: scheduleDate.toLocaleDateString('en-CA')
+                    }
+                });
+            });
+        });
+
+        if (notifications.length > 0) {
+            await LocalNotifications.schedule({
+                notifications
+            });
+            console.log(`Programmate ${notifications.length} notifiche ripetitive.`);
+        }
+    }
+};
+
