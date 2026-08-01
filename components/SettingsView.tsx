@@ -218,7 +218,7 @@ const SettingsView: React.FC<SettingsViewProps> = ({
           <div className="p-6 flex flex-col items-center gap-1">
             <p className="text-[10px] text-gray-400 font-black uppercase tracking-widest mb-1">Sviluppato da</p>
             <a
-              href="https://fedtorrent.github.io/lemieapp.github.io/"
+              href="https://fedtorrent.github.io/LeMieApp.github.io/"
               target="_blank"
               rel="noopener noreferrer"
               className="group flex flex-col items-center gap-2 active:scale-95 transition-all p-4 rounded-[2rem] bg-gray-50/50 dark:bg-gray-800/20 border border-transparent hover:border-primary/20"
