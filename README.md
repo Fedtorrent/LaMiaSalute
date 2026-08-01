@@ -3,7 +3,7 @@
 **La Mia Salute** è un'applicazione Android (e Web) progettata per semplificare la gestione quotidiana della propria salute e di quella dei propri familiari. Grazie a un'interfaccia intuitiva e moderna, permette di tenere traccia di farmaci, parametri vitali e documenti medici in un unico posto sicuro e locale.
 
 <div align="center">
-  <img src="public/IconaPersonale.png" width="128" alt="Logo La Mia Salute" />
+  <img src="public/LaMiaSalute_BIG.png" width="128" alt="Logo La Mia Salute" />
 </div>
 
 ## 🌟 Funzionalità Principali
