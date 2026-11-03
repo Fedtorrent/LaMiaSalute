@@ -104,6 +104,13 @@ export interface AnalysisItem {
   maxValue?: string;
 }
 
+export interface CustomAnalysisName {
+  id: string;
+  patientId: string;
+  name: string;
+  isDeleted: boolean;
+}
+
 export interface AppData {
   patients: Patient[];
   medications: Medication[];
@@ -114,6 +121,7 @@ export interface AppData {
   bloodPressureLogs: BloodPressureLog[];
   analysisSessions: AnalysisSession[];
   analysisItems: AnalysisItem[];
+  customAnalysisNames?: CustomAnalysisName[];
 }
 
 export interface ExportSelections {

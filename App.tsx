@@ -151,6 +151,29 @@ const App = () => {
     data.analysisItems.filter(i => i.patientId === activePatientId),
     [data.analysisItems, activePatientId]);
 
+  const proposedAnalysisNames = useMemo(() => {
+    if (!activePatientId) return [];
+    const patientItems = data.analysisItems.filter(i => i.patientId === activePatientId);
+    const historicalNames = patientItems.map(i => i.name).filter(Boolean);
+    const patientCustom = (data.customAnalysisNames || []).filter(c => c.patientId === activePatientId);
+
+    const deletedSet = new Set(patientCustom.filter(c => c.isDeleted).map(c => c.name));
+    const activeCustomSet = new Set(patientCustom.filter(c => !c.isDeleted).map(c => c.name));
+
+    const resultSet = new Set<string>();
+    for (const name of historicalNames) {
+      if (!deletedSet.has(name)) {
+        resultSet.add(name);
+      }
+    }
+    for (const name of activeCustomSet) {
+      if (!deletedSet.has(name)) {
+        resultSet.add(name);
+      }
+    }
+    return Array.from(resultSet).sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+  }, [data.analysisItems, data.customAnalysisNames, activePatientId]);
+
 
   // Swipe State
   const [touchStart, setTouchStart] = useState<number | null>(null);
@@ -761,18 +784,23 @@ const App = () => {
     try {
       await db.renameAnalysisName(oldName, newName, activePatientId);
       await loadAllData();
-      showToast('Nomi aggiornati in tutte le sessioni!');
+      showToast('Nome analisi modificato per i nuovi inserimenti');
     } catch (e) {
       console.error(e);
-      showToast('Errore durante la ridenominazione.', 'error');
+      showToast('Errore durante la modifica del nome.', 'error');
     }
   };
 
   const handleDeleteAnalysisName = async (name: string) => {
     if (!activePatientId) return;
-    setDeleteAnalysisName(name);
-    setDeleteType('analysis_name_all');
-    setConfirmDeleteId('confirm-placeholder');
+    try {
+      await db.deleteAnalysisName(name, activePatientId);
+      await loadAllData();
+      showToast('Nome analisi rimosso dai nomi proposti');
+    } catch (e) {
+      console.error(e);
+      showToast('Errore durante l\'eliminazione del nome.', 'error');
+    }
   };
 
   const handleAddButtonClick = () => {
@@ -2244,6 +2272,7 @@ const App = () => {
         activePatientId={activePatientId}
         allAnalysisItems={data.analysisItems}
         allSessions={data.analysisSessions}
+        proposedAnalysisNames={proposedAnalysisNames}
       />
       <ViewAnalysisModal
         isOpen={isViewAnalysisModalOpen}
@@ -2256,10 +2285,12 @@ const App = () => {
         onUpdateSession={handleUpdateAnalysisSession}
         allAnalysisItems={data.analysisItems}
         allSessions={data.analysisSessions}
+        proposedAnalysisNames={proposedAnalysisNames}
       />
       <ManageAnalysisNamesModal
         isOpen={isManageNamesModalOpen}
         onClose={() => setIsManageNamesModalOpen(false)}
+        analysisNames={proposedAnalysisNames}
         analysisItems={filteredAnalysisItems}
         onRename={handleRenameAnalysisName}
         onDelete={handleDeleteAnalysisName}

@@ -1,12 +1,13 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { X, Edit2, Trash2, Check, Search, Save } from 'lucide-react';
+import { X, Edit2, Trash2, Check, Search, AlertTriangle } from 'lucide-react';
 import { AnalysisItem } from '../types';
 import ScrollingName from './ScrollingName';
 
 interface ManageAnalysisNamesModalProps {
   isOpen: boolean;
   onClose: () => void;
-  analysisItems: AnalysisItem[];
+  analysisNames?: string[];
+  analysisItems?: AnalysisItem[];
   onRename: (oldName: string, newName: string) => Promise<void>;
   onDelete: (name: string) => Promise<void>;
 }
@@ -14,7 +15,8 @@ interface ManageAnalysisNamesModalProps {
 const ManageAnalysisNamesModal: React.FC<ManageAnalysisNamesModalProps> = ({
   isOpen,
   onClose,
-  analysisItems,
+  analysisNames,
+  analysisItems = [],
   onRename,
   onDelete
 }) => {
@@ -22,16 +24,25 @@ const ManageAnalysisNamesModal: React.FC<ManageAnalysisNamesModalProps> = ({
   const [editingName, setEditingName] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
 
-  const uniqueNames = useMemo(() => {
-    const names = analysisItems.map(i => i.name);
-    return Array.from(new Set(names)).sort();
-  }, [analysisItems]);
+  // Stati per la conferma della modifica ed eliminazione
+  const [renameTarget, setRenameTarget] = useState<{ oldName: string; newName: string } | null>(null);
+  const [deleteTarget, setDeleteTarget] = useState<string | null>(null);
+  const [isProcessing, setIsProcessing] = useState(false);
 
-  // Svuota la ricerca ogni volta che il modale viene aperto
+  const uniqueNames = useMemo(() => {
+    if (analysisNames) return [...analysisNames].sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+    const names = analysisItems.map(i => i.name).filter(Boolean);
+    return Array.from(new Set(names)).sort((a, b) => a.localeCompare(b, 'it', { sensitivity: 'base' }));
+  }, [analysisNames, analysisItems]);
+
+  // Svuota la ricerca e gli stati di modifica quando il modale viene aperto/chiuso
   useEffect(() => {
     if (isOpen) {
       setSearchQuery('');
       setEditingName(null);
+      setRenameTarget(null);
+      setDeleteTarget(null);
+      setIsProcessing(false);
     }
   }, [isOpen]);
 
@@ -48,16 +59,44 @@ const ManageAnalysisNamesModal: React.FC<ManageAnalysisNamesModalProps> = ({
     setNewName(name);
   };
 
-  const handleSaveRename = async () => {
-    if (editingName && newName.trim() && newName !== editingName) {
-      await onRename(editingName, newName.trim());
+  const handleRequestSaveRename = () => {
+    if (editingName && newName.trim() && newName.trim() !== editingName) {
+      setRenameTarget({ oldName: editingName, newName: newName.trim() });
+    } else {
+      setEditingName(null);
     }
-    setEditingName(null);
+  };
+
+  const handleConfirmRename = async () => {
+    if (!renameTarget) return;
+    setIsProcessing(true);
+    try {
+      await onRename(renameTarget.oldName, renameTarget.newName);
+      setRenameTarget(null);
+      setEditingName(null);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsProcessing(false);
+    }
+  };
+
+  const handleConfirmDelete = async () => {
+    if (!deleteTarget) return;
+    setIsProcessing(true);
+    try {
+      await onDelete(deleteTarget);
+      setDeleteTarget(null);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsProcessing(false);
+    }
   };
 
   return (
     <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-black/60 backdrop-blur-sm animate-in fade-in duration-300">
-      <div className="bg-white dark:bg-gray-900 w-full max-w-md max-h-[80vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-white/20">
+      <div className="bg-white dark:bg-gray-900 w-full max-w-md max-h-[80vh] rounded-[2.5rem] shadow-2xl flex flex-col overflow-hidden border border-white/20 relative">
 
         {/* Header */}
         <div className="p-6 bg-gradient-to-r from-blue-600 to-indigo-700 text-white flex justify-between items-center shrink-0">
@@ -101,10 +140,14 @@ const ManageAnalysisNamesModal: React.FC<ManageAnalysisNamesModalProps> = ({
                       type="text"
                       value={newName}
                       onChange={(e) => setNewName(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter') handleRequestSaveRename();
+                        if (e.key === 'Escape') setEditingName(null);
+                      }}
                       className="flex-1 bg-white dark:bg-gray-700 border-2 border-blue-500 rounded-lg px-3 py-1 text-sm font-bold dark:text-white outline-none"
                     />
-                    <button onClick={handleSaveRename} className="p-2 bg-green-500 text-white rounded-lg"><Check size={16} strokeWidth={3}/></button>
-                    <button onClick={() => setEditingName(null)} className="p-2 bg-gray-300 dark:bg-gray-600 text-white rounded-lg"><X size={16}/></button>
+                    <button onClick={handleRequestSaveRename} className="p-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-colors"><Check size={16} strokeWidth={3}/></button>
+                    <button onClick={() => setEditingName(null)} className="p-2 bg-gray-300 dark:bg-gray-600 text-white rounded-lg hover:bg-gray-400 transition-colors"><X size={16}/></button>
                   </div>
                 ) : (
                   <>
@@ -114,9 +157,9 @@ const ManageAnalysisNamesModal: React.FC<ManageAnalysisNamesModalProps> = ({
                         className="font-bold text-sm dark:text-gray-200"
                       />
                     </div>
-                    <div className="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <button onClick={() => handleStartEdit(name)} className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"><Edit2 size={16}/></button>
-                      <button onClick={() => onDelete(name)} className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"><Trash2 size={16}/></button>
+                    <div className="flex gap-1 opacity-90 group-hover:opacity-100 transition-opacity">
+                      <button onClick={() => handleStartEdit(name)} title="Modifica nome" className="p-2 text-blue-500 hover:bg-blue-50 dark:hover:bg-blue-900/30 rounded-lg transition-colors"><Edit2 size={16}/></button>
+                      <button onClick={() => setDeleteTarget(name)} title="Elimina dai nomi proposti" className="p-2 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/30 rounded-lg transition-colors"><Trash2 size={16}/></button>
                     </div>
                   </>
                 )}
@@ -130,6 +173,73 @@ const ManageAnalysisNamesModal: React.FC<ManageAnalysisNamesModalProps> = ({
             Chiudi
           </button>
         </div>
+
+        {/* Modal Avviso Conferma Modifica */}
+        {renameTarget && (
+          <div className="absolute inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-gray-100 dark:border-gray-700 text-center space-y-4">
+              <div className="w-12 h-12 bg-amber-100 dark:bg-amber-900/30 text-amber-500 rounded-full flex items-center justify-center mx-auto">
+                <AlertTriangle size={24} />
+              </div>
+              <h3 className="text-lg font-black text-gray-800 dark:text-white">Modifica Nome Analisi</h3>
+              <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                La modifica interesserà <strong>solo i nuovi inserimenti</strong>.<br />
+                Le analisi già inserite nel database rimarranno con il nome originale ("{renameTarget.oldName}").
+              </p>
+              <div className="p-3 bg-gray-50 dark:bg-gray-900/60 rounded-xl text-xs font-bold text-gray-700 dark:text-gray-300 border border-gray-200 dark:border-gray-700">
+                Nuovo nome: <span className="text-blue-600 dark:text-blue-400 font-black">{renameTarget.newName}</span>
+              </div>
+              <div className="flex gap-2 pt-2">
+                <button
+                  disabled={isProcessing}
+                  onClick={() => setRenameTarget(null)}
+                  className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-xs font-bold rounded-xl transition-colors"
+                >
+                  Annulla
+                </button>
+                <button
+                  disabled={isProcessing}
+                  onClick={handleConfirmRename}
+                  className="flex-1 py-3 bg-blue-600 hover:bg-blue-700 text-white text-xs font-black rounded-xl shadow-lg shadow-blue-500/20 transition-all flex items-center justify-center gap-1"
+                >
+                  {isProcessing ? 'Salvataggio...' : 'Conferma'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Modal Avviso Conferma Eliminazione */}
+        {deleteTarget && (
+          <div className="absolute inset-0 z-[120] bg-black/70 backdrop-blur-sm flex items-center justify-center p-4 animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-gray-800 rounded-3xl p-6 w-full max-w-sm shadow-2xl border border-gray-100 dark:border-gray-700 text-center space-y-4">
+              <div className="w-12 h-12 bg-red-100 dark:bg-red-900/30 text-red-500 rounded-full flex items-center justify-center mx-auto">
+                <AlertTriangle size={24} />
+              </div>
+              <h3 className="text-lg font-black text-gray-800 dark:text-white">Elimina Nome Analisi</h3>
+              <p className="text-xs text-gray-600 dark:text-gray-300 leading-relaxed">
+                Le analisi già inserite con il nome "<strong>{deleteTarget}</strong>" <strong>lo manterranno nel database</strong>, ma non verrà più proposto nella lista dei nomi per i nuovi inserimenti.
+              </p>
+              <div className="flex gap-2 pt-2">
+                <button
+                  disabled={isProcessing}
+                  onClick={() => setDeleteTarget(null)}
+                  className="flex-1 py-3 bg-gray-100 dark:bg-gray-700 hover:bg-gray-200 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 text-xs font-bold rounded-xl transition-colors"
+                >
+                  Annulla
+                </button>
+                <button
+                  disabled={isProcessing}
+                  onClick={handleConfirmDelete}
+                  className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white text-xs font-black rounded-xl shadow-lg shadow-red-500/20 transition-all flex items-center justify-center gap-1"
+                >
+                  {isProcessing ? 'Eliminazione...' : 'Elimina'}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
       </div>
     </div>
   );

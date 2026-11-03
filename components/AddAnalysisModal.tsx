@@ -9,6 +9,7 @@ interface AddAnalysisModalProps {
   activePatientId: string | null;
   allAnalysisItems: AnalysisItem[];
   allSessions?: AnalysisSession[];
+  proposedAnalysisNames?: string[];
 }
 
 // Componente autocomplete personalizzato - lista SEMPRE sotto il campo
@@ -87,7 +88,8 @@ const AddAnalysisModal: React.FC<AddAnalysisModalProps> = ({
   onAdded,
   activePatientId,
   allAnalysisItems,
-  allSessions = []
+  allSessions = [],
+  proposedAnalysisNames
 }) => {
   const [date, setDate] = useState(new Date().toISOString().split('T')[0]);
   const [laboratory, setLaboratory] = useState('');
@@ -98,9 +100,10 @@ const AddAnalysisModal: React.FC<AddAnalysisModalProps> = ({
   const [isSaving, setIsSaving] = useState(false);
 
   const suggestionList = useMemo(() => {
+    if (proposedAnalysisNames && proposedAnalysisNames.length > 0) return proposedAnalysisNames;
     const historicalNames = allAnalysisItems.map(i => i.name);
     return Array.from(new Set([...COMMON_EXAMS, ...historicalNames])).sort();
-  }, [allAnalysisItems]);
+  }, [allAnalysisItems, proposedAnalysisNames]);
 
   const typeSuggestions = useMemo(() => {
     const historicalTypes = allSessions.map(s => s.type).filter((t): t is string => !!t);

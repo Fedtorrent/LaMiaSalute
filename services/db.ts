@@ -134,6 +134,12 @@ class DatabaseService {
         unit TEXT,
         minValue TEXT,
         maxValue TEXT
+      )`,
+      `CREATE TABLE IF NOT EXISTS custom_analysis_names (
+        id TEXT PRIMARY KEY,
+        patientId TEXT,
+        name TEXT,
+        isDeleted INTEGER DEFAULT 0
       )`
     ];
 
@@ -231,6 +237,13 @@ class DatabaseService {
     const weights = (await this.db.query('SELECT * FROM weights')).values as WeightLog[];
     const glucoseLogs = (await this.db.query('SELECT * FROM glucose')).values as GlucoseLog[];
     const bloodPressureLogs = (await this.db.query('SELECT * FROM blood_pressure')).values as BloodPressureLog[];
+    const customAnalysisNamesRaw = (await this.db.query('SELECT * FROM custom_analysis_names')).values || [];
+    const customAnalysisNames = customAnalysisNamesRaw.map((c: any) => ({
+      id: c.id,
+      patientId: c.patientId,
+      name: c.name,
+      isDeleted: c.isDeleted === 1
+    }));
 
     return {
       patients: patients || [],
@@ -241,7 +254,8 @@ class DatabaseService {
       glucoseLogs: glucoseLogs || [],
       bloodPressureLogs: bloodPressureLogs || [],
       analysisSessions: (await this.db.query('SELECT * FROM analysis_sessions')).values || [],
-      analysisItems: (await this.db.query('SELECT * FROM analysis_items')).values || []
+      analysisItems: (await this.db.query('SELECT * FROM analysis_items')).values || [],
+      customAnalysisNames
     };
   }
 
@@ -392,16 +406,23 @@ class DatabaseService {
   }
 
   async renameAnalysisName(oldName: string, newName: string, patientId: string) {
+    const oldId = `${patientId}_${oldName}`;
     await this.db.run(
-      `UPDATE analysis_items SET name = ? WHERE name = ? AND patientId = ?`,
-      [newName, oldName, patientId]
+      `INSERT OR REPLACE INTO custom_analysis_names (id, patientId, name, isDeleted) VALUES (?, ?, ?, 1)`,
+      [oldId, patientId, oldName]
+    );
+    const newId = `${patientId}_${newName}`;
+    await this.db.run(
+      `INSERT OR REPLACE INTO custom_analysis_names (id, patientId, name, isDeleted) VALUES (?, ?, ?, 0)`,
+      [newId, patientId, newName]
     );
   }
 
   async deleteAnalysisName(name: string, patientId: string) {
+    const id = `${patientId}_${name}`;
     await this.db.run(
-      `DELETE FROM analysis_items WHERE name = ? AND patientId = ?`,
-      [name, patientId]
+      `INSERT OR REPLACE INTO custom_analysis_names (id, patientId, name, isDeleted) VALUES (?, ?, ?, 1)`,
+      [id, patientId, name]
     );
   }
 
@@ -486,6 +507,14 @@ class DatabaseService {
         await this.db.run(
           `INSERT OR REPLACE INTO analysis_items (id, sessionId, patientId, name, value, unit, minValue, maxValue) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
           [i.id, i.sessionId, i.patientId, i.name, i.value, i.unit, i.minValue || null, i.maxValue || null]
+        );
+      }
+    }
+    if (data.customAnalysisNames) {
+      for (const c of data.customAnalysisNames) {
+        await this.db.run(
+          `INSERT OR REPLACE INTO custom_analysis_names (id, patientId, name, isDeleted) VALUES (?, ?, ?, ?)`,
+          [c.id, c.patientId, c.name, c.isDeleted ? 1 : 0]
         );
       }
     }

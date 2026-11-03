@@ -14,6 +14,7 @@ interface ViewAnalysisModalProps {
   onUpdateSession: (id: string, date: string, laboratory: string, type: string) => Promise<void>;
   allAnalysisItems: AnalysisItem[];
   allSessions?: AnalysisSession[];
+  proposedAnalysisNames?: string[];
 }
 
 // Componente autocomplete personalizzato
@@ -108,7 +109,7 @@ const getRangeStatus = (value: string, min?: string, max?: string): 'out' | 'in'
 };
 
 const ViewAnalysisModal: React.FC<ViewAnalysisModalProps> = ({
-  isOpen, onClose, session, items, onUpdateItem, onDeleteItem, onAddItem, onUpdateSession, allAnalysisItems, allSessions = []
+  isOpen, onClose, session, items, onUpdateItem, onDeleteItem, onAddItem, onUpdateSession, allAnalysisItems, allSessions = [], proposedAnalysisNames
 }) => {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editValues, setEditValues] = useState<AnalysisItem | null>(null);
@@ -120,9 +121,10 @@ const ViewAnalysisModal: React.FC<ViewAnalysisModalProps> = ({
   const [viewMode, setViewMode] = useState<'cards' | 'table'>('cards');
 
   const suggestionList = useMemo(() => {
+    if (proposedAnalysisNames && proposedAnalysisNames.length > 0) return proposedAnalysisNames;
     const historicalNames = allAnalysisItems.map(i => i.name);
     return Array.from(new Set([...COMMON_EXAMS, ...historicalNames])).sort();
-  }, [allAnalysisItems]);
+  }, [allAnalysisItems, proposedAnalysisNames]);
 
   const typeSuggestions = useMemo(() => {
     const historicalTypes = (allSessions || []).map(s => s.type).filter((t): t is string => !!t);
