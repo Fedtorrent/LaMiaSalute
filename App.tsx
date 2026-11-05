@@ -823,15 +823,27 @@ const App = () => {
     const target = selectedDate;
 
     filteredMedications.forEach(med => {
-      // FIX BUG: Se non attivo, mostra solo per date passato (storico). 
-      // Per OGGI e FUTURO solo se attivo.
-      const shouldShowByStatus = med.isActive || target < todayIso;
-
-      if (shouldShowByStatus && isMedicationDue(med, target)) {
+      if (isMedicationDue(med, target)) {
         med.schedule.forEach(slot => {
           const time = normalizeTime(slot.time);
           const log = filteredLogs.find(l => String(l.medicationId) === String(med.id) && normalizeTime(l.time) === time && l.date === selectedDate);
-          items.push({ time, med, quantity: slot.quantity, status: log ? log.status : 'pending' });
+          const status = log ? log.status : 'pending';
+
+          let shouldShowSlot = false;
+          if (target < todayIso) {
+            // Data passata: mostra lo storico dei log
+            shouldShowSlot = true;
+          } else if (target > todayIso) {
+            // Data futura: mostra solo se attivo
+            shouldShowSlot = med.isActive;
+          } else {
+            // Data odierna (oggi): mostra se attivo, OPPURE se disattivo ma già stato assunto o saltato oggi
+            shouldShowSlot = med.isActive || status === 'taken' || status === 'skipped';
+          }
+
+          if (shouldShowSlot) {
+            items.push({ time, med, quantity: slot.quantity, status });
+          }
         });
       }
     });
@@ -983,11 +995,14 @@ const App = () => {
     // Daily (Today)
     const todayItems: any[] = [];
     filteredMedications.forEach(med => {
-      if (med.isActive && isMedicationDue(med, todayIso)) {
+      if (isMedicationDue(med, todayIso)) {
         med.schedule.forEach(slot => {
           const slotTime = normalizeTime(slot.time);
           const log = filteredLogs.find(l => String(l.medicationId) === String(med.id) && normalizeTime(l.time) === slotTime && l.date === todayIso);
-          todayItems.push({ status: log ? log.status : 'pending' });
+          const status = log ? log.status : 'pending';
+          if (med.isActive || status === 'taken' || status === 'skipped') {
+            todayItems.push({ status });
+          }
         });
       }
     });
@@ -1641,7 +1656,15 @@ const App = () => {
                       </div>
                       <button
                         onClick={async () => {
-                          const updatedMed = { ...med, isActive: !med.isActive };
+                          const isNowActive = !med.isActive;
+                          const now = new Date();
+                          const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+                          const updatedMed = {
+                            ...med,
+                            isActive: isNowActive,
+                            // Se è un farmaco temporaneo e viene riattivato, azzeriamo il contatore impostando startDate a oggi
+                            ...(isNowActive && med.durationDays && med.durationDays > 0 ? { startDate: todayIso } : {})
+                          };
                           await db.upsertMedication(updatedMed);
                           await loadAllData();
                         }}

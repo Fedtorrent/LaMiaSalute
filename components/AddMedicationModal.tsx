@@ -96,9 +96,14 @@ const AddMedicationModal: React.FC<AddMedicationModalProps> = ({ isOpen, onClose
       color: selectedColor,
       icon: 'pill',
       isActive: isActive,
-      startDate: initialData ? initialData.startDate : (() => {
+      startDate: (() => {
         const now = new Date();
-        return `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        const todayIso = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+        // Se è un farmaco temporaneo ed è stato riattivato (o era inattivo e viene salvato attivo), azzeriamo il contatore impostando startDate a oggi
+        if (isTemporary && isActive && initialData && !initialData.isActive) {
+          return todayIso;
+        }
+        return initialData ? initialData.startDate : todayIso;
       })(),
       durationDays: isTemporary ? Number(durationDays) : undefined,
       notificationsEnabled,
